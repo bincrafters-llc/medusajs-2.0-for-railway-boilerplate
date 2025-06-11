@@ -29,6 +29,8 @@ class ShippoProviderService extends AbstractFulfillmentProviderService {
     }
 
     override async getFulfillmentOptions(): Promise<FulfillmentOption[]> {
+        console.log('*** Fetching fulfillment options from Shippo ***');
+
         const carriers = await this.shippo.carrierAccounts.list({
             results: 200
         });
@@ -46,6 +48,7 @@ class ShippoProviderService extends AbstractFulfillmentProviderService {
     }
 
     override async canCalculate(data: CreateShippingOptionDTO): Promise<boolean> {
+        console.log('*** Can calculate from shippo ***')
         return true;
     }
 
@@ -54,7 +57,7 @@ class ShippoProviderService extends AbstractFulfillmentProviderService {
         data: CalculateShippingOptionPriceDTO["data"],
         context: CalculateShippingOptionPriceDTO["context"]): Promise<CalculatedShippingOptionPrice>
     {
-
+        console.log('*** Calculating pricing from shippo ***');
         console.log(JSON.stringify(optionData, null, 4));
         console.log(JSON.stringify(data, null, 4));
         console.log(JSON.stringify(context, null, 4));
@@ -126,8 +129,10 @@ class ShippoProviderService extends AbstractFulfillmentProviderService {
     }
 
     override async validateFulfillmentData(optionData: Record<string, unknown>, data: Record<string, unknown>, context: ValidateFulfillmentDataContext): Promise<any> {
-        console.log('Validating fulfillment data for Shippo provider');
+        console.log('*** Validating fulfillment data for Shippo provider ***');
         console.log(JSON.stringify(optionData, null, 4));
+        console.log(JSON.stringify(data, null, 4));
+        console.log(JSON.stringify(context, null, 4));
 
         const carrier_id = optionData.provider_id as string;
         const carrier_service_code = optionData.carrier_service_code as string;
@@ -136,9 +141,20 @@ class ShippoProviderService extends AbstractFulfillmentProviderService {
             throw new Error("Invalid or missing carrier_id in fulfillment option data.");
         }
 
+        const carriers = await this.shippo.carrierAccounts.list({
+            results: 200
+        });
+        const isValidCarrier = carriers.results.some(c => c.accountId === carrier_id);
+
+        if (!isValidCarrier) {
+            throw new Error("Provided carrier_id is not recognized.");
+        }
+
         // if (!carrier_service_code || typeof carrier_service_code !== "string") {
         //     throw new Error("Invalid or missing carrier_service_code in fulfillment option data.");
         // }
+
+        console.log('validation ended');
 
         return {
             carrier_id,
@@ -146,22 +162,91 @@ class ShippoProviderService extends AbstractFulfillmentProviderService {
         };
     }
 
-    async createFulfillment(data: Record<string, unknown>, items: Partial<Omit<FulfillmentItemDTO, "fulfillment">>[], order: Partial<FulfillmentOrderDTO> | undefined, fulfillment: Partial<Omit<FulfillmentDTO, "provider_id" | "data" | "items">>): Promise<CreateFulfillmentResult> {
+    async createFulfillment(
+        data: Record<string, unknown>,
+        items: Partial<Omit<FulfillmentItemDTO, "fulfillment">>[],
+        order: Partial<FulfillmentOrderDTO> | undefined, fulfillment: Partial<Omit<FulfillmentDTO, "provider_id" | "data" | "items">>
+    ): Promise<CreateFulfillmentResult> {
+        if (!order?.shipping_address || !data?.carrier_id || !data?.carrier_service_code) {
+            throw new Error("Missing shipping address or carrier information");
+        }
 
-        // TODO: Go back to this and implement the actual fulfillment creation logic
-        console.log('Creating fulfillment withShippo provider');
-        console.log(JSON.stringify(data, null, 4));
-        console.log(JSON.stringify(items, null, 4));
-        console.log(JSON.stringify(order, null, 4));
-        console.log(JSON.stringify(fulfillment, null, 4));
 
-        // Here you would implement the logic to create a fulfillment using Shippo
-        // This is a placeholder implementation
+
+
+        const from = {
+            name: "Your Store",
+            street1: "123 Warehouse St",
+            city: "Miami",
+            state: "FL",
+            zip: "33101",
+            country: "US",
+            phone: "555-555-5555"
+        };
+
+        const to = {
+            name: `${order.shipping_address.first_name} ${order.shipping_address.last_name}`,
+            street1: order.shipping_address.address_1,
+            street2: order.shipping_address.address_2,
+            city: order.shipping_address.city,
+            state: order.shipping_address.province,
+            zip: order.shipping_address.postal_code,
+            country: order.shipping_address.country_code,
+            phone: order.shipping_address.phone
+        };
+
+        const parcel = {
+            length: "10",
+            width: "6",
+            height: "4",
+            distance_unit: "cm",
+            weight: "500",
+            mass_unit: "g"
+        };
+
+        // 1. Create shipment
+        const shipment = await this.shippo.shipments.create({
+            addressFrom: from,
+            addressTo: to,
+            parcels: [parcel],
+            carrierAccounts: [data.carrier_id],
+            servicelevelToken: data.carrier_service_code
+        });
+
+        // 2. Find correct rate
+        const rate = shipment.rates.find(
+            (r) =>
+                r.carrier_account === data.carrier_id &&
+                r.servicelevel.token === data.carrier_service_code
+        );
+
+        if (!rate) {
+            throw new Error("Matching rate not found in Shippo response");
+        }
+
+        // 3. Create transaction (i.e., buy label)
+        const transaction = await this.shippo.transactions.create({
+            shipment: shipment.object_id,
+            rate: rate.object_id,
+            label_file_type: "PDF",
+            async: false
+        });
+
+        if (transaction.status !== "SUCCESS") {
+            throw new Error(`Shippo transaction failed: ${transaction.messages?.[0]?.text || "Unknown error"}`);
+        }
+
         return {
-            tracking_number: "123456789",
-            tracking_url: "https://shippo.com/tracking/123456789",
-            label_url: "https://shippo.com/label/123456789"
-        } as any;
+            tracking_number: transaction.tracking_number,
+            tracking_url: transaction.tracking_url_provider,
+            label_url: transaction.label_url,
+            external_id: transaction.object_id,
+            data: {
+                shippo_transaction_id: transaction.object_id,
+                carrier: transaction.provider,
+                service: transaction.servicelevel?.name
+            }
+        };
     }
 
     getIdentifier(): any {

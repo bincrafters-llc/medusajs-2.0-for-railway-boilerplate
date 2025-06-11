@@ -173,80 +173,84 @@ class ShippoProviderService extends AbstractFulfillmentProviderService {
 
 
 
-
-        const from = {
-            name: "Your Store",
-            street1: "123 Warehouse St",
-            city: "Miami",
-            state: "FL",
-            zip: "33101",
-            country: "US",
-            phone: "555-555-5555"
-        };
-
-        const to = {
-            name: `${order.shipping_address.first_name} ${order.shipping_address.last_name}`,
-            street1: order.shipping_address.address_1,
-            street2: order.shipping_address.address_2,
-            city: order.shipping_address.city,
-            state: order.shipping_address.province,
-            zip: order.shipping_address.postal_code,
-            country: order.shipping_address.country_code,
-            phone: order.shipping_address.phone
-        };
-
-        const parcel = {
-            length: "10",
-            width: "6",
-            height: "4",
-            distance_unit: "cm",
-            weight: "500",
-            mass_unit: "g"
-        };
-
-        // 1. Create shipment
-        const shipment = await this.shippo.shipments.create({
-            addressFrom: from,
-            addressTo: to,
-            parcels: [parcel],
-            carrierAccounts: [data.carrier_id],
-            servicelevelToken: data.carrier_service_code
-        });
-
-        // 2. Find correct rate
-        const rate = shipment.rates.find(
-            (r) =>
-                r.carrier_account === data.carrier_id &&
-                r.servicelevel.token === data.carrier_service_code
-        );
-
-        if (!rate) {
-            throw new Error("Matching rate not found in Shippo response");
-        }
-
-        // 3. Create transaction (i.e., buy label)
-        const transaction = await this.shippo.transactions.create({
-            shipment: shipment.object_id,
-            rate: rate.object_id,
-            label_file_type: "PDF",
-            async: false
-        });
-
-        if (transaction.status !== "SUCCESS") {
-            throw new Error(`Shippo transaction failed: ${transaction.messages?.[0]?.text || "Unknown error"}`);
-        }
+        //
+        // const from = {
+        //     name: "Your Store",
+        //     street1: "123 Warehouse St",
+        //     city: "Miami",
+        //     state: "FL",
+        //     zip: "33101",
+        //     country: "US",
+        //     phone: "555-555-5555"
+        // };
+        //
+        // const to = {
+        //     name: `${order.shipping_address.first_name} ${order.shipping_address.last_name}`,
+        //     street1: order.shipping_address.address_1,
+        //     street2: order.shipping_address.address_2,
+        //     city: order.shipping_address.city,
+        //     state: order.shipping_address.province,
+        //     zip: order.shipping_address.postal_code,
+        //     country: order.shipping_address.country_code,
+        //     phone: order.shipping_address.phone
+        // };
+        //
+        // const parcel = {
+        //     length: "10",
+        //     width: "6",
+        //     height: "4",
+        //     distance_unit: "cm",
+        //     weight: "500",
+        //     mass_unit: "g"
+        // };
+        //
+        // // 1. Create shipment
+        // const shipment = await this.shippo.shipments.create({
+        //     addressFrom: from,
+        //     addressTo: to,
+        //     parcels: [parcel],
+        //     carrierAccounts: [data.carrier_id],
+        //     servicelevelToken: data.carrier_service_code
+        // });
+        //
+        // // 2. Find correct rate
+        // const rate = shipment.rates.find(
+        //     (r) =>
+        //         r.carrier_account === data.carrier_id &&
+        //         r.servicelevel.token === data.carrier_service_code
+        // );
+        //
+        // if (!rate) {
+        //     throw new Error("Matching rate not found in Shippo response");
+        // }
+        //
+        // // 3. Create transaction (i.e., buy label)
+        // const transaction = await this.shippo.transactions.create({
+        //     shipment: shipment.object_id,
+        //     rate: rate.object_id,
+        //     label_file_type: "PDF",
+        //     async: false
+        // });
+        //
+        // if (transaction.status !== "SUCCESS") {
+        //     throw new Error(`Shippo transaction failed: ${transaction.messages?.[0]?.text || "Unknown error"}`);
+        // }
+        //
+        // return {
+        //     tracking_number: transaction.tracking_number,
+        //     tracking_url: transaction.tracking_url_provider,
+        //     label_url: transaction.label_url,
+        //     external_id: transaction.object_id,
+        //     data: {
+        //         shippo_transaction_id: transaction.object_id,
+        //         carrier: transaction.provider,
+        //         service: transaction.servicelevel?.name
+        //     }
+        // };
 
         return {
-            tracking_number: transaction.tracking_number,
-            tracking_url: transaction.tracking_url_provider,
-            label_url: transaction.label_url,
-            external_id: transaction.object_id,
-            data: {
-                shippo_transaction_id: transaction.object_id,
-                carrier: transaction.provider,
-                service: transaction.servicelevel?.name
-            }
-        };
+            labels: [""]
+        } as any
     }
 
     getIdentifier(): any {

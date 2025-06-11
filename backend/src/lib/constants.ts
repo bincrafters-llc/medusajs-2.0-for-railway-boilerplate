@@ -100,3 +100,8 @@ export const WORKER_MODE =
  * Disable Admin
  */
 export const SHOULD_DISABLE_ADMIN = process.env.MEDUSA_DISABLE_ADMIN === 'true'
+
+/**
+ * SHIPPO API Key
+ */
+export const SHIPPO_API_KEY = process.env.SHIPPO_API_KEY;

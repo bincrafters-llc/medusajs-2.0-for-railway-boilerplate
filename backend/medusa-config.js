@@ -21,7 +21,7 @@ import {
   MINIO_SECRET_KEY,
   MINIO_BUCKET,
   MEILISEARCH_HOST,
-  MEILISEARCH_ADMIN_KEY
+  MEILISEARCH_ADMIN_KEY, SHIPPO_API_KEY
 } from 'lib/constants';
 
 loadEnv(process.env.NODE_ENV, process.cwd());
@@ -127,7 +127,28 @@ const medusaConfig = {
           },
         ],
       },
-    }] : [])
+    }] : []),
+    ...(SHIPPO_API_KEY ? [
+      {
+        resolve: "@medusajs/medusa/fulfillment",
+        options: {
+          providers: [
+            {
+              resolve: "@medusajs/medusa/fulfillment-manual",
+              id: "manual",
+            },
+            {
+              resolve: "./src/modules/shippo",
+              id: "shippo",
+              options: {
+                apiKey: process.env.SHIPPO_API_KEY,
+              },
+            },
+          ],
+        },
+      }
+    ] : []),
+
   ],
   plugins: [
   ...(MEILISEARCH_HOST && MEILISEARCH_ADMIN_KEY ? [{

@@ -40,6 +40,7 @@
     "minio": "^8.0.3",
     "pg": "^8.13.1",
     "resend": "4.0.1",
+    "shippo": "^2.15.0",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
